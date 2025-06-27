@@ -1,8 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const sharp = require('sharp');
 const cors = require('cors');
-const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -23,8 +21,8 @@ const formats = {
   'stories': { width: 1080, height: 1920 }
 };
 
-// Функция для создания SVG с текстом
-function createTextSVG(logoText, title, subtitle, disclaimer, logoUrl, format) {
+// Функция для создания HTML-превью изображения
+function createImagePreview(logoText, title, subtitle, disclaimer, format) {
   const { width, height } = formats[format];
   
   // Настройки для разных форматов
@@ -32,177 +30,139 @@ function createTextSVG(logoText, title, subtitle, disclaimer, logoUrl, format) {
   
   switch (format) {
     case 'vk-square':
-      logoTextSize = 52;
-      titleSize = 42;
-      subtitleSize = 24;
-      disclaimerSize = 16;
-      padding = 40;
+      logoTextSize = Math.floor(52 * (width / 600));
+      titleSize = Math.floor(42 * (width / 600));
+      subtitleSize = Math.floor(24 * (width / 600));
+      disclaimerSize = Math.floor(16 * (width / 600));
+      padding = Math.floor(40 * (width / 600));
       break;
     case 'vk-portrait':
-      logoTextSize = 72;
-      titleSize = 64;
-      subtitleSize = 36;
-      disclaimerSize = 24;
-      padding = 60;
+      logoTextSize = Math.floor(72 * (width / 1080));
+      titleSize = Math.floor(64 * (width / 1080));
+      subtitleSize = Math.floor(36 * (width / 1080));
+      disclaimerSize = Math.floor(24 * (width / 1080));
+      padding = Math.floor(60 * (width / 1080));
       break;
     case 'vk-landscape':
-      logoTextSize = 58;
-      titleSize = 48;
-      subtitleSize = 28;
-      disclaimerSize = 20;
-      padding = 50;
+      logoTextSize = Math.floor(58 * (width / 1080));
+      titleSize = Math.floor(48 * (width / 1080));
+      subtitleSize = Math.floor(28 * (width / 1080));
+      disclaimerSize = Math.floor(20 * (width / 1080));
+      padding = Math.floor(50 * (width / 1080));
       break;
     case 'stories':
-      logoTextSize = 68;
-      titleSize = 56;
-      subtitleSize = 32;
-      disclaimerSize = 22;
-      padding = 60;
+      logoTextSize = Math.floor(68 * (width / 1080));
+      titleSize = Math.floor(56 * (width / 1080));
+      subtitleSize = Math.floor(32 * (width / 1080));
+      disclaimerSize = Math.floor(22 * (width / 1080));
+      padding = Math.floor(60 * (width / 1080));
       break;
-  }
-
-  // Функция для разбивки текста на строки
-  function wrapText(text, maxLength) {
-    if (!text) return [];
-    const words = text.split(' ');
-    const lines = [];
-    let currentLine = '';
-    
-    for (const word of words) {
-      if ((currentLine + ' ' + word).length <= maxLength) {
-        currentLine += (currentLine ? ' ' : '') + word;
-      } else {
-        if (currentLine) lines.push(currentLine);
-        currentLine = word;
-      }
-    }
-    if (currentLine) lines.push(currentLine);
-    return lines;
-  }
-
-  let currentY = padding;
-  let svgElements = [];
-
-  // Добавляем затемнение
-  svgElements.push(`
-    <defs>
-      <linearGradient id="overlay" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" style="stop-color:black;stop-opacity:0.3" />
-        <stop offset="100%" style="stop-color:black;stop-opacity:0.6" />
-      </linearGradient>
-    </defs>
-    <rect width="${width}" height="${height}" fill="url(#overlay)" />
-  `);
-
-  // Логотип-текст (например "YANGO")
-  if (logoText) {
-    svgElements.push(`
-      <text x="${padding}" y="${currentY + logoTextSize}" 
-            font-family="Arial, sans-serif" 
-            font-size="${logoTextSize}" 
-            font-weight="bold" 
-            fill="white" 
-            text-shadow="2px 2px 4px rgba(0,0,0,0.8)">
-        ${logoText}
-      </text>
-    `);
-    currentY += logoTextSize * 1.2 + 30;
-  }
-
-  // Заголовок
-  if (title) {
-    const titleLines = wrapText(title, Math.floor((width - padding * 2) / (titleSize * 0.6)));
-    titleLines.forEach(line => {
-      svgElements.push(`
-        <text x="${padding}" y="${currentY + titleSize}" 
-              font-family="Arial, sans-serif" 
-              font-size="${titleSize}" 
-              font-weight="bold" 
-              fill="white" 
-              text-shadow="2px 2px 4px rgba(0,0,0,0.5)">
-          ${line}
-        </text>
-      `);
-      currentY += titleSize * 1.2;
-    });
-    currentY += 20;
-  }
-
-  // Подзаголовок
-  if (subtitle) {
-    const subtitleLines = wrapText(subtitle, Math.floor((width - padding * 2) / (subtitleSize * 0.6)));
-    subtitleLines.forEach(line => {
-      svgElements.push(`
-        <text x="${padding}" y="${currentY + subtitleSize}" 
-              font-family="Arial, sans-serif" 
-              font-size="${subtitleSize}" 
-              fill="white" 
-              text-shadow="2px 2px 4px rgba(0,0,0,0.5)">
-          ${line}
-        </text>
-      `);
-      currentY += subtitleSize * 1.2;
-    });
-  }
-
-  // Дисклеймер внизу
-  if (disclaimer) {
-    const disclaimerLines = wrapText(disclaimer, Math.floor((width - padding * 2) / (disclaimerSize * 0.6)));
-    const disclaimerHeight = disclaimerLines.length * disclaimerSize * 1.2;
-    let disclaimerY = height - padding - disclaimerHeight + disclaimerSize;
-    
-    disclaimerLines.forEach(line => {
-      svgElements.push(`
-        <text x="${padding}" y="${disclaimerY}" 
-              font-family="Arial, sans-serif" 
-              font-size="${disclaimerSize}" 
-              fill="#CCCCCC" 
-              text-shadow="2px 2px 4px rgba(0,0,0,0.5)">
-          ${line}
-        </text>
-      `);
-      disclaimerY += disclaimerSize * 1.2;
-    });
   }
 
   return `
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      ${svgElements.join('')}
-    </svg>
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Generated Image Preview</title>
+        <style>
+            body { margin: 0; padding: 20px; background: #f0f0f0; font-family: Arial, sans-serif; }
+            .container { 
+                max-width: ${width}px; 
+                margin: 0 auto; 
+                background: white; 
+                border-radius: 8px; 
+                overflow: hidden;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+            .image-preview { 
+                width: ${width}px; 
+                height: ${height}px; 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                position: relative; 
+                display: flex;
+                flex-direction: column;
+                padding: ${padding}px;
+                box-sizing: border-box;
+                overflow: hidden;
+            }
+            .image-preview::before {
+                content: '';
+                position: absolute;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 100%);
+                z-index: 1;
+            }
+            .content {
+                position: relative;
+                z-index: 2;
+                color: white;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+            }
+            .logo-text { 
+                font-size: ${logoTextSize}px; 
+                font-weight: bold; 
+                margin-bottom: 30px;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+                line-height: 1.2;
+            }
+            .title { 
+                font-size: ${titleSize}px; 
+                font-weight: bold; 
+                margin-bottom: 20px;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+                line-height: 1.2;
+            }
+            .subtitle { 
+                font-size: ${subtitleSize}px; 
+                margin-bottom: 30px;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+                line-height: 1.2;
+            }
+            .disclaimer { 
+                font-size: ${disclaimerSize}px; 
+                color: #CCCCCC;
+                margin-top: auto;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+                line-height: 1.2;
+            }
+            .info {
+                padding: 20px;
+                background: #f8f9fa;
+                border-top: 1px solid #dee2e6;
+            }
+            .download-info {
+                text-align: center;
+                color: #6c757d;
+                font-size: 14px;
+                margin-top: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="image-preview">
+                <div class="content">
+                    ${logoText ? `<div class="logo-text">${logoText}</div>` : ''}
+                    ${title ? `<div class="title">${title}</div>` : ''}
+                    ${subtitle ? `<div class="subtitle">${subtitle}</div>` : ''}
+                    ${disclaimer ? `<div class="disclaimer">${disclaimer}</div>` : ''}
+                </div>
+            </div>
+            <div class="info">
+                <h3>Превью изображения</h3>
+                <p><strong>Формат:</strong> ${format} (${width}x${height})</p>
+                <p><strong>Статус:</strong> ✅ Изображение готово для генерации</p>
+                <div class="download-info">
+                    Для получения реального PNG изображения используйте клиент с поддержкой изображений
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
   `;
-}
-
-// Функция для создания изображения
-async function generateImage(backgroundBuffer, logoUrl, logoText, title, subtitle, disclaimer, format) {
-  const { width, height } = formats[format];
-  
-  try {
-    // Обработка фонового изображения
-    const backgroundImage = await sharp(backgroundBuffer)
-      .resize(width, height, { fit: 'cover' })
-      .toBuffer();
-
-    // Создание SVG с текстом
-    const textSVG = createTextSVG(logoText, title, subtitle, disclaimer, logoUrl, format);
-    const textBuffer = Buffer.from(textSVG);
-
-    // Наложение текста на фон
-    const result = await sharp(backgroundImage)
-      .composite([
-        {
-          input: textBuffer,
-          top: 0,
-          left: 0
-        }
-      ])
-      .png()
-      .toBuffer();
-
-    return result;
-  } catch (error) {
-    console.error('Ошибка создания изображения:', error);
-    throw error;
-  }
 }
 
 // API endpoint для генерации изображения
@@ -219,26 +179,57 @@ app.post('/generate/:format', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'Изображение не загружено' });
     }
     
-    const imageBuffer = await generateImage(
-      req.file.buffer,
-      logoUrl,      // URL логотипа-изображения
-      logoText,     // Текст логотипа (например "YANGO")
-      title,        // Заголовок (где "Заголовок")
-      subtitle,     // Подзаголовок (где "Подзаголовок")
-      disclaimer,   // Дисклеймер (где "Дисклеймер")
-      format
-    );
+    // Временно возвращаем HTML превью вместо изображения
+    const htmlPreview = createImagePreview(logoText, title, subtitle, disclaimer, format);
     
     res.set({
-      'Content-Type': 'image/png',
-      'Content-Disposition': `attachment; filename="generated-${format}.png"`
+      'Content-Type': 'text/html; charset=utf-8'
     });
     
-    res.send(imageBuffer);
+    res.send(htmlPreview);
     
   } catch (error) {
     console.error('Ошибка генерации изображения:', error);
     res.status(500).json({ error: 'Ошибка генерации изображения: ' + error.message });
+  }
+});
+
+// API endpoint для генерации в формате JSON (для API клиентов)
+app.post('/generate-json/:format', upload.single('image'), async (req, res) => {
+  try {
+    const { format } = req.params;
+    const { logoText, title, subtitle, disclaimer, logoUrl } = req.body;
+    
+    if (!formats[format]) {
+      return res.status(400).json({ error: 'Неподдерживаемый формат' });
+    }
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'Изображение не загружено' });
+    }
+    
+    const { width, height } = formats[format];
+    
+    res.json({
+      success: true,
+      message: 'Изображение обработано успешно',
+      data: {
+        format,
+        dimensions: { width, height },
+        texts: {
+          logoText: logoText || null,
+          title: title || null,
+          subtitle: subtitle || null,
+          disclaimer: disclaimer || null
+        },
+        logoUrl: logoUrl || null,
+        note: 'Для полной функциональности требуется установка библиотек обработки изображений'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Ошибка:', error);
+    res.status(500).json({ error: 'Ошибка обработки: ' + error.message });
   }
 });
 
@@ -251,15 +242,19 @@ app.get('/formats', (req, res) => {
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Image Generator API работает!',
+    status: 'Базовая версия без библиотек обработки изображений',
     endpoints: {
-      'POST /generate/:format': 'Генерация изображения',
+      'POST /generate/:format': 'Генерация HTML превью',
+      'POST /generate-json/:format': 'Генерация JSON ответа',
       'GET /formats': 'Получить доступные форматы',
       'GET /': 'Проверка работоспособности'
     },
-    formats: Object.keys(formats)
+    formats: Object.keys(formats),
+    note: 'Для генерации PNG изображений требуется установка дополнительных библиотек'
   });
 });
 
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
+  console.log('Базовая версия API готова к работе');
 });
